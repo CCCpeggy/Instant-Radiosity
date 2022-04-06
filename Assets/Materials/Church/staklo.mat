@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Staklo
+  m_Name: staklo
   m_Shader: {fileID: 4800000, guid: 0348ea93e3f33b246a04be6fd2e91f32, type: 3}
   m_ShaderKeywords: 
   m_LightmapFlags: 4

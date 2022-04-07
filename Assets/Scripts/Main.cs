@@ -12,6 +12,7 @@ public class Test : RayTracingTutorial
   enum Status{
     GenVLP,
     GetVLPFromGPU,
+    DrawHlslScene,
     GenScene,
     None
   }
@@ -30,6 +31,7 @@ public class Test : RayTracingTutorial
   public const int SamplingCountOneSide = 300;
   private readonly int _frameIndexShaderId = Shader.PropertyToID("_FrameIndex");
   private readonly int _lightSamplePosBufferId = Shader.PropertyToID("_LightSamplePosBuffer");
+  private readonly int _lightSampleIntensityBufferId = Shader.PropertyToID("_LightSampleIntensityBuffer");
   private readonly int _vitualLightPointsId = Shader.PropertyToID("_VitualLightPoints");
   private readonly int _samplingCountOneSideId = Shader.PropertyToID("_SamplingCountOneSide");
   private readonly int _loopCountInOneFrameId = Shader.PropertyToID("_LoopCountInOneFrame");
@@ -54,7 +56,7 @@ public class Test : RayTracingTutorial
   {
     base.Render(context, camera);
     var cmd = CommandBufferPool.Get(typeof(OutputColorTutorial).Name);
-    
+    bool savePng = false;
     try {
       switch (status) {
         case Status.GenVLP:
@@ -72,17 +74,20 @@ public class Test : RayTracingTutorial
             sphere.transform.position = v.pos;
             sphere.transform.localScale = new Vector3(1, 1, 1) * 0.05f;
             vlpRenderer.Add(sphere.GetComponent<Renderer>());
-          }
-
-          DrawLightPoint(cmd, context, camera);
-          
-          status = Status.GenScene;
+          };
+          status = Status.DrawHlslScene;
+          break;
+        case Status.DrawHlslScene:
+          DrawScene(cmd, context, camera);
+          if (camera != Camera.main) status = Status.GenScene;
           break;
         case Status.GenScene:
-          if (camera.cameraType == CameraType.Game)
-            _frameIndex++;
+          if (camera.cameraType != CameraType.Game) return;
+          if (camera == Camera.main) return;
+          _frameIndex++;
           GenerateScene(cmd, context, camera);
           DrawLightPoint(cmd, context, camera);
+          status = Status.None;
           break;
         case Status.None:
           break;
@@ -91,11 +96,19 @@ public class Test : RayTracingTutorial
     finally
     {
       context.Submit();
+      if (savePng) {
+        Texture2D tex = new Texture2D(camera.pixelWidth, camera.pixelHeight, TextureFormat.RGB24, false);
+        tex.ReadPixels(new Rect(0, 0, camera.pixelWidth, camera.pixelHeight), 0, 0);
+        tex.Apply();
+        string path = Application.dataPath + "/Images/" + _frameIndex + ".png";
+        Debug.Log(path);
+        File.WriteAllBytes(path, tex.EncodeToPNG());
+      }
       CommandBufferPool.Release(cmd);
     }
   }
 
-  private void DrawLightPoint(CommandBuffer cmd, ScriptableRenderContext context, Camera camera, int vlpIdx=-1) {
+  private void DrawScene(CommandBuffer cmd, ScriptableRenderContext context, Camera camera) {
     cmd.SetRenderTarget(new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget));
     cmd.ClearRenderTarget(true, true, new Color(0, 0, 0));
     context.ExecuteCommandBuffer(cmd);
@@ -107,6 +120,18 @@ public class Test : RayTracingTutorial
       foreach (var renderer in SceneManager.Instance.renderers) {
         cmd.DrawRenderer(renderer, renderer.sharedMaterial, 0, 0);
       }
+      for (int i = 0; i < vlp.Count(); i++) {
+        cmd.DrawRenderer(vlpRenderer[i], asset.LightMaterial);
+      }
+      context.ExecuteCommandBuffer(cmd);
+    }
+  }
+  private void DrawLightPoint(CommandBuffer cmd, ScriptableRenderContext context, Camera camera, int vlpIdx=-1) {
+    cmd.SetRenderTarget(new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget));
+    // cmd.Clear();
+
+    using (new ProfilingSample(cmd, "RenderScene")) {
+      context.SetupCameraProperties(camera);
       if (vlpIdx == -1) {
         for (int i = 0; i < vlp.Count(); i++) {
           // if (i / 15 != _frameIndex) continue;
@@ -144,7 +169,8 @@ public class Test : RayTracingTutorial
 
     var accelerationStructure = _pipeline.RequestAccelerationStructure();
     var PRNGStates = _pipeline.RequirePRNGStates(camera);
-    var lightSamplePosBuffer = ((mRayTracingRenderPipeline)_pipeline).RequireComputeBuffer(_lightSamplePosBufferId, vlp.Select(x=>x.pos).ToList());
+    var lightSamplePosBuffer = ((mRayTracingRenderPipeline)_pipeline).RequireComputeBuffer(_lightSamplePosBufferId * 2, vlp.Select(x=>x.pos).ToList());
+    var lightSampleIntensityBuffer = ((mRayTracingRenderPipeline)_pipeline).RequireComputeBuffer(_lightSampleIntensityBufferId, vlp.Select(x=>x.intensity).ToList());
     using (new ProfilingSample(cmd, "RayTracing"))
     {
       cmd.SetRayTracingShaderPass(_shader, "RayTracing");
@@ -155,6 +181,7 @@ public class Test : RayTracingTutorial
       cmd.SetRayTracingBufferParam(_shader, _PRNGStatesShaderId, PRNGStates);
       cmd.SetRayTracingTextureParam(_shader, _outputTargetShaderId, outputTarget);
       cmd.SetRayTracingVectorParam(_shader, _outputTargetSizeShaderId, outputTargetSize);
+      cmd.SetRayTracingBufferParam(_shader, _lightSampleIntensityBufferId, lightSampleIntensityBuffer);
       cmd.SetGlobalBuffer(_lightSamplePosBufferId, lightSamplePosBuffer);
       cmd.DispatchRays(_shader, "GenShadowMap", (uint) outputTarget.rt.width,
         (uint) outputTarget.rt.height, 1, camera);

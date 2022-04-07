@@ -23,6 +23,18 @@ public class mRayTracingRenderPipeline : RayTracingRenderPipeline
     return buffer;
   }
 
+  public ComputeBuffer RequireComputeBuffer(int id, List<float> data)
+  {
+    if (Buffers.TryGetValue(id, out var buffer))
+      return buffer;
+
+    buffer = new ComputeBuffer(data.Count, sizeof(float));
+    buffer.SetData(data);
+
+    Buffers.Add(id, buffer);
+    return buffer;
+  }
+
   protected override void Dispose(bool disposing)
   {
     base.Dispose(disposed);

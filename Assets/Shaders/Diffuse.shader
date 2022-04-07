@@ -70,7 +70,7 @@
       #pragma raytracing test
 
       #include "./Common.hlsl"
-      #include "../../GPU-Ray-Tracing-in-One-Weekend/src/Assets/Shaders/PRNG.hlsl"
+      #include "../GPU-Ray-Tracing-in-One-Weekend/src/Assets/Shaders/PRNG.hlsl"
 
       struct IntersectionVertex
       {

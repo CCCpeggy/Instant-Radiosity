@@ -11,6 +11,7 @@ float4 _OutputTargetSize;
 int _FrameIndex;
 int _SamplingCountOneSide;
 int _LoopCountInOneFrame;
+Buffer<float> _LightSampleIntensityBuffer;
 
 inline float3 BackgroundColor(float3 origin, float3 direction)
 {
@@ -41,7 +42,7 @@ void PutLightSource()
   float3 direction = GetRandomOnUnitSphere(PRNGStates);
 
   _VitualLightPoints[baseIdx].pos = lightSourcePos;
-  _VitualLightPoints[baseIdx].intensity = 200;
+  _VitualLightPoints[baseIdx].intensity = 1;
 
   RayDesc rayDescriptor;
   rayDescriptor.Origin = origin;
@@ -52,7 +53,7 @@ void PutLightSource()
   RayIntersection rayIntersection;
   rayIntersection.remainingDepth = 1;
   rayIntersection.PRNGStates = PRNGStates;
-  rayIntersection.intensity = 200;
+  rayIntersection.intensity = 1;
   rayIntersection.type = 5;
   rayIntersection.normalWS = float3(0, -1, 0);
   for (uint i = 1; i < 10; i++) {
@@ -96,14 +97,14 @@ void GenShadowMap()
     RayIntersection rayIntersection;
     rayIntersection.remainingDepth = 1;
     rayIntersection.PRNGStates = PRNGStates;
-    rayIntersection.intensity = 1;
-    int lightIdx = (_FrameIndex * _LoopCountInOneFrame + i) % numLightSouce;
+    int lightIdx = (_FrameIndex * _LoopCountInOneFrame + i) * 9 % numLightSouce;
+    rayIntersection.intensity = _LightSampleIntensityBuffer[lightIdx];
     rayIntersection.lightPos = _LightSamplePosBuffer[lightIdx];
     rayIntersection.color = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
     rayIntersection.type = 6;
     TraceRay(_AccelerationStructure, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xFF, 0, 1, 0, rayDescriptor, rayIntersection);
-    finalColor = rayIntersection.color;
+    finalColor += rayIntersection.color / _LoopCountInOneFrame;
     
     PRNGStates = rayIntersection.PRNGStates;
     _PRNGStates[PRNGIndex] = PRNGStates;
@@ -112,7 +113,7 @@ void GenShadowMap()
   if (_FrameIndex > 1)
   {
     float a = 1.0f / (float)_FrameIndex;
-    finalColor += (_OutputTarget[dispatchIdx] * (1.0f - a) + finalColor * a) / 20;
+    finalColor = _OutputTarget[dispatchIdx] * (1.0f - a) + finalColor * a;
   }
 
   _OutputTarget[dispatchIdx] = finalColor;

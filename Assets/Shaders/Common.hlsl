@@ -20,15 +20,26 @@ CBUFFER_END
 Buffer<float3> _LightSamplePosBuffer;
 RaytracingAccelerationStructure _AccelerationStructure;
 
+struct VLP
+{
+  float3 pos;
+  float intensity;
+};
+RWStructuredBuffer<VLP> _VitualLightPoints;
+
 struct RayIntersection
 {
   int remainingDepth;
   uint4 PRNGStates;
   float4 color;
+  float3 lightPos;
   int type;
   float distance;
+  float intensity;
+  RayDesc rayDescriptor;
+  float3 normalWS;
 };
-// 0 non-light 1 light
+// 0 non-light 1 target is light 3 ao 5 from light
 
 struct AttributeData
 {

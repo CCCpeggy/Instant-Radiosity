@@ -32,10 +32,12 @@ public class Test : RayTracingTutorial
   private readonly int _lightSamplePosBufferId = Shader.PropertyToID("_LightSamplePosBuffer");
   private readonly int _vitualLightPointsId = Shader.PropertyToID("_VitualLightPoints");
   private readonly int _samplingCountOneSideId = Shader.PropertyToID("_SamplingCountOneSide");
+  private readonly int _loopCountInOneFrameId = Shader.PropertyToID("_LoopCountInOneFrame");
 
   public List<Vector3> LightSamplePos;
 
   private VLP[] vlp;
+  private List<Renderer> vlpRenderer = new List<Renderer>();
   TestAsset asset;
   private ComputeBuffer VitualLightPointsBuffer;
   /// <summary>
@@ -51,12 +53,6 @@ public class Test : RayTracingTutorial
   public override void Render(ScriptableRenderContext context, Camera camera)
   {
     base.Render(context, camera);
-    var outputTarget = RequireOutputTarget(camera);
-    // var outputTargetSize = RequireOutputTargetSize(camera);
-
-    // var accelerationStructure = _pipeline.RequestAccelerationStructure();
-    // var PRNGStates = _pipeline.RequirePRNGStates(camera);
-    // var lightSamplePosBuffer = ((mRayTracingRenderPipeline)_pipeline).RequireComputeBuffer(_lightSamplePosBufferId, LightSamplePos);
     var cmd = CommandBufferPool.Get(typeof(OutputColorTutorial).Name);
     
     try {
@@ -71,13 +67,22 @@ public class Test : RayTracingTutorial
           vlp = new VLP[vlpLen];
           VitualLightPointsBuffer.GetData(vlp);
           vlp = vlp.Where(x=>x.intensity > 0).ToArray();
+          foreach (var v in vlp) {
+            var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            sphere.transform.position = v.pos;
+            sphere.transform.localScale = new Vector3(1, 1, 1) * 0.05f;
+            vlpRenderer.Add(sphere.GetComponent<Renderer>());
+          }
 
           DrawLightPoint(cmd, context, camera);
           
-          status = Status.None;
+          status = Status.GenScene;
           break;
         case Status.GenScene:
+          if (camera.cameraType == CameraType.Game)
+            _frameIndex++;
           GenerateScene(cmd, context, camera);
+          DrawLightPoint(cmd, context, camera);
           break;
         case Status.None:
           break;
@@ -90,7 +95,7 @@ public class Test : RayTracingTutorial
     }
   }
 
-  private void DrawLightPoint(CommandBuffer cmd, ScriptableRenderContext context, Camera camera) {
+  private void DrawLightPoint(CommandBuffer cmd, ScriptableRenderContext context, Camera camera, int vlpIdx=-1) {
     cmd.SetRenderTarget(new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget));
     cmd.ClearRenderTarget(true, true, new Color(0, 0, 0));
     context.ExecuteCommandBuffer(cmd);
@@ -102,12 +107,13 @@ public class Test : RayTracingTutorial
       foreach (var renderer in SceneManager.Instance.renderers) {
         cmd.DrawRenderer(renderer, renderer.sharedMaterial, 0, 0);
       }
-      foreach (var v in vlp) {
-        var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        sphere.transform.position = v.pos;
-        sphere.transform.localScale = new Vector3(1, 1, 1) * 0.05f;
-        Renderer renderer = sphere.GetComponent<Renderer>();
-        cmd.DrawRenderer(renderer, asset.LightMaterial);
+      if (vlpIdx == -1) {
+        for (int i = 0; i < vlp.Count(); i++) {
+          // if (i / 15 != _frameIndex) continue;
+          cmd.DrawRenderer(vlpRenderer[i], asset.LightMaterial);
+        }
+      } else {
+        cmd.DrawRenderer(vlpRenderer[vlpIdx], asset.LightMaterial);
       }
       context.ExecuteCommandBuffer(cmd);
     }
@@ -133,49 +139,51 @@ public class Test : RayTracingTutorial
   }
  
   private void GenerateScene(CommandBuffer cmd, ScriptableRenderContext context, Camera camera, int vlpIdx=-1) {
-    //   if (_frameIndex < SamplingCountOneSide * SamplingCountOneSide)
-    //   {
-    //     using (new ProfilingSample(cmd, "RayTracing"))
-    //     {
-    //       cmd.SetRayTracingShaderPass(_shader, "RayTracing");
-    //       cmd.SetRayTracingAccelerationStructure(_shader, _pipeline.accelerationStructureShaderId,
-    //         accelerationStructure);
-    //       cmd.SetRayTracingIntParam(_shader, _frameIndexShaderId, _frameIndex);
-    //       cmd.SetRayTracingIntParam(_shader, _samplingCountOneSideId, SamplingCountOneSide);
-    //       cmd.SetRayTracingBufferParam(_shader, _PRNGStatesShaderId, PRNGStates);
-    //       cmd.SetRayTracingTextureParam(_shader, _outputTargetShaderId, outputTarget);
-    //       cmd.SetRayTracingVectorParam(_shader, _outputTargetSizeShaderId, outputTargetSize);
-    //       cmd.SetGlobalBuffer(_lightSamplePosBufferId, lightSamplePosBuffer);
-    //       cmd.DispatchRays(_shader, "AntialiasingRayGenShader", (uint) outputTarget.rt.width,
-    //         (uint) outputTarget.rt.height, 1, camera);
-    //     }
+    var outputTarget = RequireOutputTarget(camera);
+    var outputTargetSize = RequireOutputTargetSize(camera);
 
-    //     context.ExecuteCommandBuffer(cmd);
-    //     if (camera.cameraType == CameraType.Game)
-    //       _frameIndex++;
+    var accelerationStructure = _pipeline.RequestAccelerationStructure();
+    var PRNGStates = _pipeline.RequirePRNGStates(camera);
+    var lightSamplePosBuffer = ((mRayTracingRenderPipeline)_pipeline).RequireComputeBuffer(_lightSamplePosBufferId, vlp.Select(x=>x.pos).ToList());
+    using (new ProfilingSample(cmd, "RayTracing"))
+    {
+      cmd.SetRayTracingShaderPass(_shader, "RayTracing");
+      cmd.SetRayTracingAccelerationStructure(_shader, _pipeline.accelerationStructureShaderId, accelerationStructure);
+      cmd.SetRayTracingIntParam(_shader, _loopCountInOneFrameId, vlpIdx >= 0 ? 1 : 15);
+      cmd.SetRayTracingIntParam(_shader, _frameIndexShaderId, vlpIdx >= 0 ? vlpIdx : _frameIndex);
+      cmd.SetRayTracingIntParam(_shader, _samplingCountOneSideId, SamplingCountOneSide);
+      cmd.SetRayTracingBufferParam(_shader, _PRNGStatesShaderId, PRNGStates);
+      cmd.SetRayTracingTextureParam(_shader, _outputTargetShaderId, outputTarget);
+      cmd.SetRayTracingVectorParam(_shader, _outputTargetSizeShaderId, outputTargetSize);
+      cmd.SetGlobalBuffer(_lightSamplePosBufferId, lightSamplePosBuffer);
+      cmd.DispatchRays(_shader, "GenShadowMap", (uint) outputTarget.rt.width,
+        (uint) outputTarget.rt.height, 1, camera);
+    }
 
-    //     using (new ProfilingSample(cmd, "FinalBlit"))
-    //     {
-    //       cmd.Blit(outputTarget, BuiltinRenderTextureType.CameraTarget, Vector2.one, Vector2.zero);
+    context.ExecuteCommandBuffer(cmd);
 
-    //       if (false && _frameIndex % 100 == 0) {
-    //         // RenderTexture outputRenderTexture = RenderTexture.active;
-    //         // var scale = RTHandles.rtHandleProperties.rtHandleScale;
-    //         // cmd.Blit(outputTarget, outputRenderTexture, new Vector2(scale.x, scale.y), Vector2.zero, 0, 0);
+    using (new ProfilingSample(cmd, "FinalBlit"))
+    {
+      cmd.Blit(outputTarget, BuiltinRenderTextureType.CameraTarget, Vector2.one, Vector2.zero);
 
-    //         Texture2D tex = new Texture2D(camera.pixelWidth, camera.pixelHeight, TextureFormat.RGB24, false);
-    //         // // ReadPixels looks at the active RenderTexture.
-    //         // RenderTexture.active = outputRenderTexture;
-    //         tex.ReadPixels(new Rect(0, 0, camera.pixelWidth, camera.pixelHeight), 0, 0);
-    //         tex.Apply();
+      // if (false && _frameIndex % 100 == 0) {
+      //   // RenderTexture outputRenderTexture = RenderTexture.active;
+      //   // var scale = RTHandles.rtHandleProperties.rtHandleScale;
+      //   // cmd.Blit(outputTarget, outputRenderTexture, new Vector2(scale.x, scale.y), Vector2.zero, 0, 0);
 
-    //         string path = Application.dataPath + "/" + _frameIndex + ".png";
-    //         Debug.Log(path);
-    //         File.WriteAllBytes(path, tex.EncodeToPNG());
-    //       }
-    //     }
-    //   }
+      //   Texture2D tex = new Texture2D(camera.pixelWidth, camera.pixelHeight, TextureFormat.RGB24, false);
+      //   // // ReadPixels looks at the active RenderTexture.
+      //   // RenderTexture.active = outputRenderTexture;
+      //   tex.ReadPixels(new Rect(0, 0, camera.pixelWidth, camera.pixelHeight), 0, 0);
+      //   tex.Apply();
 
-    //   context.ExecuteCommandBuffer(cmd);
+      //   string path = Application.dataPath + "/" + _frameIndex + ".png";
+      //   Debug.Log(path);
+      //   File.WriteAllBytes(path, tex.EncodeToPNG());
+      // }
+      context.ExecuteCommandBuffer(cmd);
+    }
   }
+
+  
 }

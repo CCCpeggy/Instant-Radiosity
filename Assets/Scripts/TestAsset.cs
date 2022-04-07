@@ -12,6 +12,8 @@ public class TestAsset : RayTracingTutorialAsset
   /// </summary>
   /// <returns>the tutorial.</returns>
   public List<Vector3> LightSamplePos = new List<Vector3>();
+  public Material LightMaterial;
+
   public override RayTracingTutorial CreateTutorial()
   {
     LightSamplePos.Clear();
@@ -22,8 +24,8 @@ public class TestAsset : RayTracingTutorialAsset
 
     // for corneil box
     if (LightSamplePos.Count == 0) {
-      for (float x=-0.5f; x<=0.5f; x+=0.01f) {
-        for (float z=-0.5f; z<=0.5f; z+=0.01f) {
+      for (float x=-0.5f; x<=0.5f; x+=0.1f) {
+        for (float z=-0.5f; z<=0.5f; z+=0.1f) {
           LightSamplePos.Add(new Vector3(x, 1.845f, z));
         }
       }

@@ -13,6 +13,7 @@ public class TestAsset : RayTracingTutorialAsset
   /// <returns>the tutorial.</returns>
   public List<Vector3> LightSamplePos = new List<Vector3>();
   public Material LightMaterial;
+  public Material EdgeMaterial;
 
   public override RayTracingTutorial CreateTutorial()
   {

@@ -136,3 +136,4 @@ MonoBehaviour:
   - {x: 0.49999997, y: 1.845, z: 0.39999998}
   - {x: 0.49999997, y: 1.845, z: 0.49999997}
   LightMaterial: {fileID: 2100000, guid: 59dceedbfc3e3334cb3c3369a61e42fe, type: 2}
+  EdgeMaterial: {fileID: 2100000, guid: 14be307258eaf8e4389c3e79fde158e9, type: 2}

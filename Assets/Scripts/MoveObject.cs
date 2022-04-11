@@ -20,6 +20,7 @@ public class MoveObject : MonoBehaviour
         if (Input.GetKey("right")) pos.x -= 0.05f * scale;
         if (Input.GetKey("up")) pos.z -= 0.05f * scale;
         if (Input.GetKey("down")) pos.z += 0.05f * scale;
+        if (Input.GetKey("down")) Debug.Log("ssssss");
 
 
         if (Input.GetKey("a")) pos.x += 0.05f * scale;

@@ -21,6 +21,10 @@ public class Test : RayTracingTutorial
   struct VLP {
     public Vector3 pos;
     public float intensity;
+    public VLP(Vector3 pos, float intensity) {
+      this.pos = pos;
+      this.intensity = intensity;
+    }
   }
   private readonly int _PRNGStatesShaderId = Shader.PropertyToID("_PRNGStates");
 
@@ -28,9 +32,10 @@ public class Test : RayTracingTutorial
   /// the frame index.
   /// </summary>
   private int _frameIndex = 0;
-  public const int VPLLoopCount = 1;
-  public const int LoopCountInOneFrame = 30;
+  public const int VPLLoopCount = 5;
+  public const int LoopCountInOneFrame = 25;
   public const int SamplingCountOneSide = 300;
+  public int _VPLLoopIdx = 0;
   private readonly int _frameIndexShaderId = Shader.PropertyToID("_FrameIndex");
   private readonly int _lightSamplePosBufferId = Shader.PropertyToID("_LightSamplePosBuffer");
   private readonly int _lightSampleIntensityBufferId = Shader.PropertyToID("_LightSampleIntensityBuffer");
@@ -40,7 +45,7 @@ public class Test : RayTracingTutorial
 
   public List<Vector3> LightSamplePos;
 
-  private VLP[] vlp;
+  private List<VLP> vlp = new List<VLP>();
   private List<Renderer> vlpRenderer = new List<Renderer>();
   TestAsset asset;
   private ComputeBuffer VitualLightPointsBuffer;
@@ -52,6 +57,7 @@ public class Test : RayTracingTutorial
   {
     this.asset = asset;
     LightSamplePos = asset.LightSamplePos;
+    vlp = LightSamplePos.Select(x => new VLP(x, asset.intensity)).ToList();
   }
 
   public override void Render(ScriptableRenderContext context, Camera camera)
@@ -64,22 +70,26 @@ public class Test : RayTracingTutorial
         case Status.GenVLP:
           GenerateVPL(cmd, context, camera);
           status = Status.GetVLPFromGPU;
+          _VPLLoopIdx++;
           break;
         case Status.GetVLPFromGPU:
 
-          int vlpLen = LightSamplePos.Count * VPLLoopCount * 10;
-          vlp = new VLP[vlpLen];
-          VitualLightPointsBuffer.GetData(vlp);
-          vlp = vlp.Where(x=>x.intensity > 0).ToArray();
-          foreach (var v in vlp) {
-            var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            sphere.transform.position = v.pos;
-            sphere.transform.localScale = new Vector3(1, 1, 1) * 0.05f;
-            vlpRenderer.Add(sphere.GetComponent<Renderer>());
-          };
-          status = Status.DrawHlslScene;
+          int vlpLen = LightSamplePos.Count * 10;
+          VLP[] _vlp = new VLP[vlpLen];
+          VitualLightPointsBuffer.GetData(_vlp);
+          vlp.AddRange(vlp.Where(x=>x.intensity > 0).ToList());
+          Debug.Log(vlp.Count);
+          status = _VPLLoopIdx < VPLLoopCount ? Status.GenVLP : Status.DrawHlslScene;
           break;
         case Status.DrawHlslScene:
+          if (vlpRenderer.Count == 0) {
+            foreach (var v in vlp) {
+              var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+              sphere.transform.position = v.pos;
+              sphere.transform.localScale = new Vector3(1, 1, 1) * asset.sphereScale;
+              vlpRenderer.Add(sphere.GetComponent<Renderer>());
+            };
+          }
           DrawScene(cmd, context, camera);
           if (camera != Camera.main) status = Status.GenScene;
           break;
@@ -92,17 +102,24 @@ public class Test : RayTracingTutorial
           // break;
         // case Status.SuggestiveContour:
           // DrawScene(cmd, context, camera);
-          int tempRTID = Shader.PropertyToID("_Temp1");
-          cmd.GetTemporaryRT(tempRTID, camera.pixelWidth, camera.pixelHeight);
-          cmd.Blit(BuiltinRenderTextureType.CameraTarget, tempRTID, Vector2.one, Vector2.zero);
-          cmd.SetRenderTarget(new RenderTargetIdentifier(tempRTID));
+          RenderTexture edgeRT = RenderTexture.GetTemporary(camera.pixelWidth, camera.pixelHeight);
+          RenderTexture edgeRT2 = RenderTexture.GetTemporary(camera.pixelWidth, camera.pixelHeight);
+          int resultRT = Shader.PropertyToID("_Temp1");
+          cmd.GetTemporaryRT(resultRT, camera.pixelWidth, camera.pixelHeight);
+          // cmd.SetRenderTarget(new RenderTargetIdentifier(tempRTID));
 
-          cmd.Blit(tempRTID, BuiltinRenderTextureType.CameraTarget, asset.EdgeMaterial);
-          context.ExecuteCommandBuffer(cmd);
+          cmd.Blit(BuiltinRenderTextureType.CameraTarget, resultRT);
+          cmd.Blit(BuiltinRenderTextureType.CameraTarget, edgeRT, asset.EdgeMaterial, 0);
+
+          // asset.EdgeMaterial.SetTexture("_EdgeTex", edgeRT);
+          // cmd.Blit(BuiltinRenderTextureType.CameraTarget, edgeRT2, asset.EdgeMaterial, 1);
+          // context.ExecuteCommandBuffer(cmd);
           
-          cmd.SetRenderTarget(new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget));
-          cmd.ClearRenderTarget(true, false, new Color(0, 0, 0));
-          context.ExecuteCommandBuffer(cmd);
+          // asset.EdgeMaterial.SetTexture("_EdgeTex", edgeRT);
+          // cmd.Blit(resultRT, BuiltinRenderTextureType.CameraTarget, asset.EdgeMaterial, 2);
+          // cmd.SetRenderTarget(new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget));
+          // cmd.ClearRenderTarget(true, false, new Color(0, 0, 0));
+          // context.ExecuteCommandBuffer(cmd);
           DrawLightPoint(cmd, context, camera);
           if(_frameIndex == 5)  savePng = true;
           break;
@@ -165,7 +182,7 @@ public class Test : RayTracingTutorial
   }
 
   private void GenerateVPL(CommandBuffer cmd, ScriptableRenderContext context, Camera camera) {
-    int vlpLen = LightSamplePos.Count * VPLLoopCount * 10;
+    int vlpLen = LightSamplePos.Count * 10;
     VitualLightPointsBuffer = new ComputeBuffer(vlpLen, sizeof(float) * 4);
     var accelerationStructure = _pipeline.RequestAccelerationStructure();
     var PRNGStates = _pipeline.RequirePRNGStates(camera);
@@ -175,9 +192,10 @@ public class Test : RayTracingTutorial
       cmd.SetRayTracingAccelerationStructure(
         _shader, _pipeline.accelerationStructureShaderId, accelerationStructure);
       cmd.SetRayTracingBufferParam(_shader, _PRNGStatesShaderId, PRNGStates);
-      cmd.SetRayTracingBufferParam(_shader, _vitualLightPointsId, VitualLightPointsBuffer);
+      cmd.SetRayTracingIntParam(_shader, "_VPLLoopIdx", _VPLLoopIdx);
+      cmd.SetGlobalBuffer(_vitualLightPointsId, VitualLightPointsBuffer);
       cmd.SetGlobalBuffer(_lightSamplePosBufferId, lightSamplePosBuffer);
-      cmd.DispatchRays(_shader, "PutLightSource", (uint)LightSamplePos.Count, VPLLoopCount, 1, camera);
+      cmd.DispatchRays(_shader, "PutLightSource", (uint)LightSamplePos.Count, 1, 1, camera);
 
       context.ExecuteCommandBuffer(cmd);
     }
@@ -205,7 +223,7 @@ public class Test : RayTracingTutorial
       cmd.SetRayTracingBufferParam(_shader, _PRNGStatesShaderId, PRNGStates);
       cmd.SetRayTracingTextureParam(_shader, _outputTargetShaderId, outputTarget);
       cmd.SetRayTracingVectorParam(_shader, _outputTargetSizeShaderId, outputTargetSize);
-      cmd.SetRayTracingBufferParam(_shader, _lightSampleIntensityBufferId, lightSampleIntensityBuffer);
+      cmd.SetGlobalBuffer(_lightSampleIntensityBufferId, lightSampleIntensityBuffer);
       cmd.SetGlobalBuffer(_lightSamplePosBufferId, lightSamplePosBuffer);
       cmd.DispatchRays(_shader, "GenShadowMap", (uint) outputTarget.rt.width,
         (uint) outputTarget.rt.height, 1, camera);

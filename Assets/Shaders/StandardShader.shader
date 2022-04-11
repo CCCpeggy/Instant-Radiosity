@@ -227,7 +227,7 @@ Shader "RayTracing/Standard"
           return;
         }
         // reflect
-        else if (0.5 < color.a) {
+        else if (0.95 < color.a) {
           // Make reflection ray.
           RayDesc rayDescriptor;
           rayDescriptor.Origin = positionWS + 0.001f * normalWS;

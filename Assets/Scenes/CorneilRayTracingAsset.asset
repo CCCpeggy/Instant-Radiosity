@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5b4436ba732cb154f891a24dddb4a59f, type: 3}
-  m_Name: RayTracingAsset
+  m_Name: CorneilRayTracingAsset
   m_EditorClassIdentifier: 
   shader: {fileID: 4807578003741378534, guid: 5de9f73a99485c04d8ea66ecd9144eb4, type: 3}
   LightSamplePos:

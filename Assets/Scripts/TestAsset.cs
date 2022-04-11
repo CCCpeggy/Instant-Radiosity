@@ -15,7 +15,9 @@ public class TestAsset : RayTracingTutorialAsset
   public int intensity;
   public float sphereScale;
   public Material LightMaterial;
+  public Material StandardMaterial;
   public Material EdgeMaterial;
+  public bool needEdge;
   public override RayTracingTutorial CreateTutorial()
   {
     // if (Sampling.position != null) {

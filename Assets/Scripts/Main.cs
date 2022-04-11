@@ -12,8 +12,10 @@ public class Test : RayTracingTutorial
   enum Status{
     GenVLP,
     GetVLPFromGPU,
+    GenVLPRenderer,
     DrawHlslScene,
     GenScene,
+    GenSingleLightScene,
     SuggestiveContour,
     None
   }
@@ -33,7 +35,7 @@ public class Test : RayTracingTutorial
   /// </summary>
   private int _frameIndex = 0;
   public const int VPLLoopCount = 2;
-  public const int LoopCountInOneFrame = 35;
+  public const int LoopCountInOneFrame = 30;
   public const int SamplingCountOneSide = 300;
   public int _VPLLoopIdx = 0;
   private readonly int _frameIndexShaderId = Shader.PropertyToID("_FrameIndex");
@@ -48,6 +50,11 @@ public class Test : RayTracingTutorial
   private List<VLP> vlp = new List<VLP>();
   private List<Renderer> vlpRenderer = new List<Renderer>();
   TestAsset asset;
+  RenderTexture _tmpRT1;
+  RenderTexture _tmpRT2;
+  RenderTexture _oriRT;
+  RenderTexture _depthRT;
+  RenderTexture _ssaoRT;
   private ComputeBuffer VitualLightPointsBuffer;
   /// <summary>
   /// constructor.
@@ -73,14 +80,13 @@ public class Test : RayTracingTutorial
           _VPLLoopIdx++;
           break;
         case Status.GetVLPFromGPU:
-
           int vlpLen = LightSamplePos.Count * 10;
           VLP[] _vlp = new VLP[vlpLen];
           VitualLightPointsBuffer.GetData(_vlp);
           vlp.AddRange(_vlp.Where(x=>x.intensity > 0).ToList());
-          status = _VPLLoopIdx < VPLLoopCount ? Status.GenVLP : Status.DrawHlslScene;
+          status = _VPLLoopIdx < VPLLoopCount ? Status.GenVLP : Status.GenVLPRenderer;
           break;
-        case Status.DrawHlslScene:
+        case Status.GenVLPRenderer:
           if (vlpRenderer.Count == 0) {
             foreach (var v in vlp) {
               var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -89,38 +95,82 @@ public class Test : RayTracingTutorial
               vlpRenderer.Add(sphere.GetComponent<Renderer>());
             };
           }
+          status = Status.GenSingleLightScene;
+          break;
+        case Status.GenSingleLightScene:
+          if (camera == Camera.main) return;
+          if (_frameIndex < LoopCountInOneFrame) {
+            GenerateScene(cmd, context, camera, _frameIndex);
+            savePng = true;
+            DrawLightPoint(cmd, context, camera, _frameIndex);
+            _frameIndex++;
+          }
+          else {
+            status = Status.GenScene;
+            _frameIndex = 0;
+          }
+          break;
+        case Status.DrawHlslScene:
+          if (camera == Camera.main) return;
           DrawScene(cmd, context, camera);
-          if (camera != Camera.main) status = Status.GenScene;
+
+          if (_tmpRT1 == null) {
+            _tmpRT1 = RenderTexture.GetTemporary(camera.pixelWidth, camera.pixelHeight);
+            _tmpRT2 = RenderTexture.GetTemporary(camera.pixelWidth, camera.pixelHeight);
+            _oriRT = RenderTexture.GetTemporary(camera.pixelWidth, camera.pixelHeight);
+            _depthRT = RenderTexture.GetTemporary(camera.pixelWidth, camera.pixelHeight);
+            _ssaoRT = RenderTexture.GetTemporary(camera.pixelWidth, camera.pixelHeight);
+          }          
+          if (camera.GetComponent<SSAOEffect>()) {
+              cmd.Blit(BuiltinRenderTextureType.CameraTarget, _oriRT, Vector2.one, Vector2.zero);
+              GetSceneDepth(cmd, context, camera);
+              cmd.Blit(BuiltinRenderTextureType.CameraTarget, _depthRT, Vector2.one, Vector2.zero);
+              camera.GetComponent<SSAOEffect>().DoSSAO(camera, cmd, _oriRT, _tmpRT1, _depthRT);
+              cmd.Blit(_tmpRT1, BuiltinRenderTextureType.CameraTarget, Vector2.one, Vector2.zero);
+              context.ExecuteCommandBuffer(cmd);
+          }
           break;
         case Status.GenScene:
           if (camera.cameraType != CameraType.Game) return;
           if (camera == Camera.main) return;
           _frameIndex++;
           GenerateScene(cmd, context, camera);
-          // status = Status.None;
-          // break;
-        // case Status.SuggestiveContour:
-          // DrawScene(cmd, context, camera);
-          RenderTexture edgeRT = RenderTexture.GetTemporary(camera.pixelWidth, camera.pixelHeight);
-          RenderTexture edgeRT2 = RenderTexture.GetTemporary(camera.pixelWidth, camera.pixelHeight);
-          int resultRT = Shader.PropertyToID("_Temp1");
-          cmd.GetTemporaryRT(resultRT, camera.pixelWidth, camera.pixelHeight);
-          // cmd.SetRenderTarget(new RenderTargetIdentifier(tempRTID));
 
-          cmd.Blit(BuiltinRenderTextureType.CameraTarget, resultRT);
-          cmd.Blit(BuiltinRenderTextureType.CameraTarget, edgeRT, asset.EdgeMaterial, 0);
+          // suggestive contour
+          if (_tmpRT1 == null) {
+            _tmpRT1 = RenderTexture.GetTemporary(camera.pixelWidth, camera.pixelHeight);
+            _tmpRT2 = RenderTexture.GetTemporary(camera.pixelWidth, camera.pixelHeight);
+            _oriRT = RenderTexture.GetTemporary(camera.pixelWidth, camera.pixelHeight);
+            _depthRT = RenderTexture.GetTemporary(camera.pixelWidth, camera.pixelHeight);
+            _ssaoRT = RenderTexture.GetTemporary(camera.pixelWidth, camera.pixelHeight);
+          }
+          SSAOEffect ssao = camera.GetComponent<SSAOEffect>();
+          cmd.Blit(BuiltinRenderTextureType.CameraTarget, _oriRT);
+          if (ssao && ssao.enabled) {
+              GetSceneDepth(cmd, context, camera);
+              cmd.Blit(BuiltinRenderTextureType.CameraTarget, _depthRT, Vector2.one, Vector2.zero);
+              ssao.DoSSAO(camera, cmd, _oriRT, _ssaoRT, _depthRT);
+              cmd.Blit(_ssaoRT, BuiltinRenderTextureType.CameraTarget, Vector2.one, Vector2.zero);
+              context.ExecuteCommandBuffer(cmd);
+          }
 
-          // asset.EdgeMaterial.SetTexture("_EdgeTex", edgeRT);
-          // cmd.Blit(BuiltinRenderTextureType.CameraTarget, edgeRT2, asset.EdgeMaterial, 1);
-          // context.ExecuteCommandBuffer(cmd);
+          if (asset.needEdge) {
+            cmd.Blit(_oriRT, _tmpRT1, asset.EdgeMaterial, 0);
+
+            asset.EdgeMaterial.SetTexture("_EdgeTex", _tmpRT1);
+            cmd.Blit(_oriRT, _tmpRT2, asset.EdgeMaterial, 1);
+            context.ExecuteCommandBuffer(cmd);
+            
+            asset.EdgeMaterial.SetTexture("_EdgeTex", _tmpRT1);
+            cmd.Blit(_oriRT, BuiltinRenderTextureType.CameraTarget, asset.EdgeMaterial, 2);
+            cmd.SetRenderTarget(new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget));
+            cmd.ClearRenderTarget(true, false, new Color(0, 0, 0));
+            context.ExecuteCommandBuffer(cmd);
+          }
           
-          // asset.EdgeMaterial.SetTexture("_EdgeTex", edgeRT);
-          // cmd.Blit(resultRT, BuiltinRenderTextureType.CameraTarget, asset.EdgeMaterial, 2);
-          // cmd.SetRenderTarget(new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget));
-          // cmd.ClearRenderTarget(true, false, new Color(0, 0, 0));
-          // context.ExecuteCommandBuffer(cmd);
+		     
           DrawLightPoint(cmd, context, camera);
-          if(_frameIndex == 5)  savePng = true;
+          // if(_frameIndex == 5)  savePng = true;
           break;
         case Status.None:
           break;
@@ -141,6 +191,21 @@ public class Test : RayTracingTutorial
     }
   }
 
+  private void GetSceneDepth(CommandBuffer cmd, ScriptableRenderContext context, Camera camera) {
+    cmd.SetRenderTarget(new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget));
+    cmd.ClearRenderTarget(true, true, new Color(0, 0, 0));
+    context.ExecuteCommandBuffer(cmd);
+    cmd.Clear();
+
+    using (new ProfilingSample(cmd, "RenderScene")) {
+      context.SetupCameraProperties(camera);
+      context.DrawSkybox(camera);
+      foreach (var renderer in SceneManager.Instance.renderers) {
+        cmd.DrawRenderer(renderer, asset.StandardMaterial, 0, 1);
+      }
+      context.ExecuteCommandBuffer(cmd);
+    }
+  }
   private void DrawScene(CommandBuffer cmd, ScriptableRenderContext context, Camera camera) {
     cmd.SetRenderTarget(new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget));
     cmd.ClearRenderTarget(true, true, new Color(0, 0, 0));
@@ -153,10 +218,8 @@ public class Test : RayTracingTutorial
       foreach (var renderer in SceneManager.Instance.renderers) {
         cmd.DrawRenderer(renderer, renderer.sharedMaterial, 0, 0);
       }
-      if (vlp != null) {
-        for (int i = 0; i < vlp.Count(); i++) {
-          cmd.DrawRenderer(vlpRenderer[i], asset.LightMaterial);
-        }
+      for (int i = 0; i < vlpRenderer.Count; i++) {
+        cmd.DrawRenderer(vlpRenderer[i], asset.LightMaterial);
       }
       context.ExecuteCommandBuffer(cmd);
     }
@@ -174,7 +237,7 @@ public class Test : RayTracingTutorial
           cmd.DrawRenderer(vlpRenderer[(0 * LoopCountInOneFrame + i) * 9 % vlp.Count()], asset.LightMaterial);
         }
       } else {
-        cmd.DrawRenderer(vlpRenderer[vlpIdx], asset.LightMaterial);
+        cmd.DrawRenderer(vlpRenderer[(0 * LoopCountInOneFrame + vlpIdx) * 9 % vlp.Count()], asset.LightMaterial);
       }
       context.ExecuteCommandBuffer(cmd);
     }
@@ -216,16 +279,15 @@ public class Test : RayTracingTutorial
     {
       cmd.SetRayTracingShaderPass(_shader, "RayTracing");
       cmd.SetRayTracingAccelerationStructure(_shader, _pipeline.accelerationStructureShaderId, accelerationStructure);
-      cmd.SetRayTracingIntParam(_shader, _loopCountInOneFrameId, vlpIdx >= 0 ? 1 : LoopCountInOneFrame);
-      // cmd.SetRayTracingIntParam(_shader, _frameIndexShaderId, vlpIdx >= 0 ? vlpIdx : _frameIndex);
-      cmd.SetRayTracingIntParam(_shader, _frameIndexShaderId, 0);
+      cmd.SetRayTracingIntParam(_shader, _loopCountInOneFrameId, LoopCountInOneFrame);
+      cmd.SetRayTracingIntParam(_shader, _frameIndexShaderId, vlpIdx >= 0 ? vlpIdx : 0);
       cmd.SetRayTracingIntParam(_shader, _samplingCountOneSideId, SamplingCountOneSide);
       cmd.SetRayTracingBufferParam(_shader, _PRNGStatesShaderId, PRNGStates);
       cmd.SetRayTracingTextureParam(_shader, _outputTargetShaderId, outputTarget);
       cmd.SetRayTracingVectorParam(_shader, _outputTargetSizeShaderId, outputTargetSize);
       cmd.SetGlobalBuffer(_lightSampleIntensityBufferId, lightSampleIntensityBuffer);
       cmd.SetGlobalBuffer(_lightSamplePosBufferId, lightSamplePosBuffer);
-      cmd.DispatchRays(_shader, "GenShadowMap", (uint) outputTarget.rt.width,
+      cmd.DispatchRays(_shader, vlpIdx >= 0 ? "GenSingleShadowMap" : "GenShadowMap", (uint) outputTarget.rt.width,
         (uint) outputTarget.rt.height, 1, camera);
     }
 

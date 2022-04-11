@@ -1459,6 +1459,7 @@ GameObject:
   - component: {fileID: 1003635038}
   - component: {fileID: 1003635039}
   - component: {fileID: 1003635040}
+  - component: {fileID: 1003635041}
   m_Layer: 0
   m_Name: camera.default
   m_TagString: Untagged
@@ -1535,6 +1536,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 132a1f3d3f947aa4289c6ca54fdaf92c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &1003635041
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1003635037}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c65a3d3b6e52d4048a383fd8e8291c46, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Radius: 0.4
+  m_SampleCount: 1
+  m_OcclusionIntensity: 1.5
+  m_Blur: 0
+  m_Downsampling: 2
+  m_OcclusionAttenuation: 1
+  m_MinZ: 0.01
+  m_SSAOShader: {fileID: 4800000, guid: b3475c3c8a3380b43bd283c5d22b6f57, type: 3}
+  m_SSAOMaterial: {fileID: 0}
+  m_RandomTexture: {fileID: 2800000, guid: fd5b8baf3c9cd4d45ab45f09cc3ce2bd, type: 3}
 --- !u!23 &1089054446 stripped
 MeshRenderer:
   m_CorrespondingSourceObject: {fileID: 3433406685210194160, guid: 4347bb53997edf8418170e1a01a5923d,

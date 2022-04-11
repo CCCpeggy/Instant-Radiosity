@@ -122,6 +122,47 @@ void GenShadowMap()
   _OutputTarget[dispatchIdx] = finalColor;
 }
 
+
+[shader("raygeneration")]
+void GenSingleShadowMap()
+{
+  const uint2 dispatchIdx = DispatchRaysIndex().xy;
+  const uint PRNGIndex = dispatchIdx.y * (int)_OutputTargetSize.x + dispatchIdx.x;
+  uint4 PRNGStates = _PRNGStates[PRNGIndex];
+
+  float4 finalColor = float4(0, 0, 0, 0);
+  float3 origin;
+  float3 direction;
+  float2 offset = float2(GetRandomValue(PRNGStates), GetRandomValue(PRNGStates));
+  offset = offset / _SamplingCountOneSide + float2(_FrameIndex / _SamplingCountOneSide, _FrameIndex % _SamplingCountOneSide)/ _SamplingCountOneSide;
+  GenerateCameraRayWithOffset(origin, direction, offset);
+
+  uint numLightSouce;
+  _LightSamplePosBuffer.GetDimensions(numLightSouce);
+  RayDesc rayDescriptor;
+  rayDescriptor.Origin = origin;
+  rayDescriptor.Direction = direction;
+  rayDescriptor.TMin = 1e-5f;
+  rayDescriptor.TMax = _CameraFarDistance;
+
+  RayIntersection rayIntersection;
+  rayIntersection.remainingDepth = 1;
+  rayIntersection.PRNGStates = PRNGStates;
+  int lightIdx = _FrameIndex * 9 % numLightSouce;
+  rayIntersection.intensity = _LightSampleIntensityBuffer[lightIdx];
+  rayIntersection.lightPos = _LightSamplePosBuffer[lightIdx];
+  rayIntersection.color = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+  rayIntersection.type = 6;
+  TraceRay(_AccelerationStructure, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xFF, 0, 1, 0, rayDescriptor, rayIntersection);
+  finalColor = rayIntersection.color;
+  
+  PRNGStates = rayIntersection.PRNGStates;
+  _PRNGStates[PRNGIndex] = PRNGStates;
+
+  _OutputTarget[dispatchIdx] = finalColor;
+}
+
 [shader("miss")]
 void MissShader(inout RayIntersection rayIntersection : SV_RayPayload)
 {

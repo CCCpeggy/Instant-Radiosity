@@ -41,4 +41,6 @@ MonoBehaviour:
   intensity: 200
   sphereScale: 0.1
   LightMaterial: {fileID: 2100000, guid: 59dceedbfc3e3334cb3c3369a61e42fe, type: 2}
+  StandardMaterial: {fileID: 2100000, guid: ec13a026d65236d4497fc19284b57d11, type: 2}
   EdgeMaterial: {fileID: 2100000, guid: 14be307258eaf8e4389c3e79fde158e9, type: 2}
+  needEdge: 0

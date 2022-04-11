@@ -10,6 +10,6 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ef4acfdeb680d4a469f891775102e078, type: 3}
-  m_Name: mRayTracingRenderPipelineAsset
+  m_Name: CorneilRayTracingRenderPipelineAsset
   m_EditorClassIdentifier: 
-  tutorialAsset: {fileID: 11400000, guid: c1a9c53a2947a104db0d43e022628e5c, type: 2}
+  tutorialAsset: {fileID: 11400000, guid: 5449281f9ce72924387045a0ca87b3a3, type: 2}

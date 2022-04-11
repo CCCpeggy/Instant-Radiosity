@@ -12,34 +12,34 @@ public class TestAsset : RayTracingTutorialAsset
   /// </summary>
   /// <returns>the tutorial.</returns>
   public List<Vector3> LightSamplePos = new List<Vector3>();
-  public int intensity = 200;
-  public int sphereScale = 1;
+  public int intensity;
+  public float sphereScale;
   public Material LightMaterial;
   public Material EdgeMaterial;
   public override RayTracingTutorial CreateTutorial()
   {
-    LightSamplePos.Clear();
     // if (Sampling.position != null) {
     //   foreach (Vector3 pos in Sampling.position)
     //     LightSamplePos.Add(pos);
     // }
 
     // // for corneil box
+    // LightSamplePos.Clear();
     // if (LightSamplePos.Count == 0) {
-    //   for (float x=-0.5f; x<=0.5f; x+=0.15f) {
-    //     for (float z=-0.5f; z<=0.5f; z+=0.15f) {
-    //       LightSamplePos.Add(new Vector3(x, 1.845f, z));
-    //     }
-    //   }
+      // for (float x=-0.5f; x<=0.5f; x+=0.25f) {
+      //   for (float z=-0.5f; z<=0.5f; z+=0.25f) {
+      //     LightSamplePos.Add(new Vector3(x, 1.845f, z));
+      //   }
+      // }
     // }
     // for church
-    // LightSamplePos.Add(new Vector3(12.5f, 1.8f, 2.5f));
-    // return new Test(this);
-    for (float x=-5f; x<=20f; x+=25/3) {
-      for (float z=-2.5f; z<=2.5f; z+=5/3) {
-        LightSamplePos.Add(new Vector3(x, 11f, z));
-      }
-    }
+    // LightSamplePos.Clear();
+    // for (float x=-5f; x<=20f; x+=25/3) {
+    //   for (float z=-2.5f; z<=2.5f; z+=5/3) {
+    //     LightSamplePos.Add(new Vector3(x, 11f, z));
+    //   }
+    // }
+    // Debug.Log(LightSamplePos.Count);
     return new Test(this);
   }
 }

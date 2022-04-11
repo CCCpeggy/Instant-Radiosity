@@ -32,8 +32,8 @@ public class Test : RayTracingTutorial
   /// the frame index.
   /// </summary>
   private int _frameIndex = 0;
-  public const int VPLLoopCount = 5;
-  public const int LoopCountInOneFrame = 25;
+  public const int VPLLoopCount = 2;
+  public const int LoopCountInOneFrame = 35;
   public const int SamplingCountOneSide = 300;
   public int _VPLLoopIdx = 0;
   private readonly int _frameIndexShaderId = Shader.PropertyToID("_FrameIndex");
@@ -77,8 +77,7 @@ public class Test : RayTracingTutorial
           int vlpLen = LightSamplePos.Count * 10;
           VLP[] _vlp = new VLP[vlpLen];
           VitualLightPointsBuffer.GetData(_vlp);
-          vlp.AddRange(vlp.Where(x=>x.intensity > 0).ToList());
-          Debug.Log(vlp.Count);
+          vlp.AddRange(_vlp.Where(x=>x.intensity > 0).ToList());
           status = _VPLLoopIdx < VPLLoopCount ? Status.GenVLP : Status.DrawHlslScene;
           break;
         case Status.DrawHlslScene:
@@ -193,6 +192,7 @@ public class Test : RayTracingTutorial
         _shader, _pipeline.accelerationStructureShaderId, accelerationStructure);
       cmd.SetRayTracingBufferParam(_shader, _PRNGStatesShaderId, PRNGStates);
       cmd.SetRayTracingIntParam(_shader, "_VPLLoopIdx", _VPLLoopIdx);
+      cmd.SetRayTracingFloatParam(_shader, "_Intensity", asset.intensity);
       cmd.SetGlobalBuffer(_vitualLightPointsId, VitualLightPointsBuffer);
       cmd.SetGlobalBuffer(_lightSamplePosBufferId, lightSamplePosBuffer);
       cmd.DispatchRays(_shader, "PutLightSource", (uint)LightSamplePos.Count, 1, 1, camera);

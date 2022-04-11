@@ -280,10 +280,6 @@ public class cpbrt : MonoBehaviour
                         // gameObject.GetComponent<MeshRenderer>().material = new UnityEngine.Material(Shader.Find("RayTracing/KdKs"));
                         gameObject.GetComponent<MeshRenderer>().material = new UnityEngine.Material(Shader.Find("RayTracing/Standard"));
                         k = find(line, "Kd");
-                        Debug.Log(line[k + 1]);
-                        Debug.Log(line[k + 2]);
-                        Debug.Log(line[k + 3]);
-                        Debug.Log(new Color(float.Parse(line[k + 1]), float.Parse(line[k + 2]), float.Parse(line[k + 3])));
                         gameObject.GetComponent<MeshRenderer>().material.SetColor("_Color", new Color(float.Parse(line[k + 1]), float.Parse(line[k + 2]), float.Parse(line[k + 3])));
                         //Debug.Log(new Color(float.Parse(line[k + 1]), float.Parse(line[k + 2]), float.Parse(line[k + 3])));
                         //k = find(line, "Ks");
